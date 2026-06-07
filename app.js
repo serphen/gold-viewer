@@ -528,8 +528,6 @@ function propLabelText(prop, name) {
 }
 
 function propPlacementMode(prop, level, pad) {
-  const model = level.models?.[String(prop.model)] || {};
-  if (pad?.bbox && propHasFlag(prop, PROPFLAG_IN_AIR)) return model.bbox ? 'pad-model' : 'pad-anchor';
   return pad?.bbox ? 'boundpad-center' : 'pad-model';
 }
 
@@ -538,12 +536,19 @@ function setupPropGeometry(prop, level, pad, placementMode) {
   return makePropGeometry(prop, level, null);
 }
 
+function shouldRenderSetupProp(prop, name, pad) {
+  if (prop.typename === 'Collectable' && name === 'hatchbolt') return false;
+  return true;
+}
+
 function addSetupProps(level) {
   const props = level.objects || [];
   const bounds = new THREE.Box3();
   for (const prop of props) {
     const pad = getPad(level, prop);
     if (!pad?.pos) continue;
+    const name = modelName(level, prop.model);
+    if (!shouldRenderSetupProp(prop, name, pad)) continue;
     const placementMode = propPlacementMode(prop, level, pad);
     const geometry = setupPropGeometry(prop, level, pad, placementMode);
     const mesh = new THREE.Mesh(
@@ -564,7 +569,6 @@ function addSetupProps(level) {
       })
     );
     mesh.add(propEdge);
-    const name = modelName(level, prop.model);
     if (placementMode === 'boundpad-center') {
       mesh.position.copy(boundPadCenter(pad));
       mesh.quaternion.copy(padAxes(pad).quaternion);
