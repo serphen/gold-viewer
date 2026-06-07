@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gold STAN Viewer</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="scene" aria-label="Gold STAN WebGL viewer"></canvas>
+
+      <section class="panel">
+        <div class="row">
+          <label for="levelSelect">Level</label>
+          <select id="levelSelect"></select>
+          <button id="startView" type="button">Back to start</button>
+          <button id="resetView" type="button">Reset</button>
+          <button id="topView" type="button">Top</button>
+        </div>
+        <div class="row split">
+          <label for="colorMode">Color</label>
+          <select id="colorMode">
+            <option value="tile">Tile</option>
+            <option value="room">Room</option>
+            <option value="raw">Raw RGB</option>
+          </select>
+        </div>
+        <div class="row split">
+          <label for="labelMode">Labels</label>
+          <select id="labelMode">
+            <option value="all" selected>All</option>
+            <option value="selected">Selected</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+        <div class="row split">
+          <label for="bgMode">Void</label>
+          <select id="bgMode">
+            <option value="grid">Soft grid</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="magenta">Magenta debug</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="roomFilter">Room</label>
+          <select id="roomFilter">
+            <option value="">all</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="tileSearch">Tile</label>
+          <input id="tileSearch" inputmode="numeric" placeholder="idx">
+          <button id="goTile" type="button">Go</button>
+        </div>
+        <div class="row">
+          <label for="coordSearch">XYZ</label>
+          <input id="coordSearch" placeholder="x,y,z">
+          <button id="goCoord" type="button">Mark</button>
+        </div>
+        <div class="toggles">
+          <label><input id="edgeToggle" type="checkbox" checked> Edges</label>
+          <label><input id="boundaryToggle" type="checkbox" checked> Boundaries</label>
+          <label><input id="visualBgToggle" type="checkbox" checked> Visual BG</label>
+          <label><input id="barsToggle" type="checkbox" checked> Bars</label>
+          <label><input id="guardsToggle" type="checkbox" checked> Guards</label>
+          <label><input id="doubleSideToggle" type="checkbox" checked> Double side</label>
+          <label><input id="markerToggle" type="checkbox" checked> Marker</label>
+        </div>
+        <div id="stats" class="stats"></div>
+      </section>
+
+      <section id="readout" class="readout">
+        <div id="selectedTile">No tile selected</div>
+        <div id="cameraReadout"></div>
+      </section>
+
+      <div class="reticle"></div>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
