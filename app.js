@@ -72,13 +72,13 @@ const keys = new Set();
 const keyDownAt = new Map();
 const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE'];
 const LABEL_CULL_INTERVAL = 0.18;
-const PROP_LABEL_DISTANCE = 5200;
 const STAN_LABEL_SURFACE_OFFSET = 0.25;
 const PROP_LABEL_SURFACE_OFFSET = 0.35;
 const STAN_LABEL_PADDING = 0.16;
 const PROP_LABEL_PADDING = 0.18;
 const PROP_VISUAL_MIN_THICKNESS = 0.2;
 const BAR_OPACITY = 0.82;
+const HATCHDOOR_OPACITY = 0.08;
 const PROP_OPACITY = 0.86;
 const GUARD_OPACITY = 0.94;
 const GUARD_RAW_LINE_THRESHOLD = 2;
@@ -412,8 +412,25 @@ function applyMergedPropBarColors(geometry) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 }
 
-function mergedBarMaterial(hasSetupProp) {
-  if (!hasSetupProp) {
+function isHatchdoorBar(bar) {
+  return bar.index === 371 && bar.name === 'hatchdoor';
+}
+
+function barBaseOpacity(bar) {
+  return isHatchdoorBar(bar) ? HATCHDOOR_OPACITY : BAR_OPACITY;
+}
+
+function mergedBarMaterial(bar) {
+  if (isHatchdoorBar(bar)) {
+    return new THREE.MeshBasicMaterial({
+      color: 0xbfd8ee,
+      transparent: true,
+      opacity: HATCHDOOR_OPACITY,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+  }
+  if (!bar.object) {
     return new THREE.MeshBasicMaterial({
       color: 0xffb000,
       transparent: true,
@@ -429,6 +446,29 @@ function mergedBarMaterial(hasSetupProp) {
     side: THREE.DoubleSide,
     depthWrite: true
   });
+}
+
+function makeHatchdoorCrossGeometry(bar) {
+  const xs = bar.points.map((point) => point.x);
+  const zs = bar.points.map((point) => point.z);
+  const xmin = Math.min(...xs);
+  const xmax = Math.max(...xs);
+  const zmin = Math.min(...zs);
+  const zmax = Math.max(...zs);
+  const y0 = bar.ymin;
+  const y1 = bar.ymax;
+  const vertices = [];
+  for (const z of [zmin, zmax]) {
+    vertices.push(xmin, y0, z, xmax, y1, z);
+    vertices.push(xmax, y0, z, xmin, y1, z);
+  }
+  for (const x of [xmin, xmax]) {
+    vertices.push(x, y0, zmin, x, y1, zmax);
+    vertices.push(x, y0, zmax, x, y1, zmin);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  return geometry;
 }
 
 function hidePropVisualMergedIntoBar(bar) {
@@ -761,7 +801,7 @@ async function loadBars(levelDataForBars, data) {
       const enrichedBar = enrichBar(bar, levelDataForBars);
       const geometry = makeBarGeometry(enrichedBar);
       if (enrichedBar.object) applyMergedPropBarColors(geometry);
-      const mesh = new THREE.Mesh(geometry, mergedBarMaterial(Boolean(enrichedBar.object)));
+      const mesh = new THREE.Mesh(geometry, mergedBarMaterial(enrichedBar));
       mesh.userData.bar = enrichedBar;
       world.add(mesh);
       barMeshes.push(mesh);
@@ -770,10 +810,23 @@ async function loadBars(levelDataForBars, data) {
 
       const edge = new THREE.LineSegments(
         new THREE.EdgesGeometry(mesh.geometry, 1),
-        new THREE.LineBasicMaterial({ color: 0xfff1a8, transparent: true, opacity: 0.78 })
+        new THREE.LineBasicMaterial({
+          color: isHatchdoorBar(enrichedBar) ? 0xe7f6ff : 0xfff1a8,
+          transparent: true,
+          opacity: isHatchdoorBar(enrichedBar) ? 0.26 : 0.78
+        })
       );
       edge.userData.barEdge = true;
       mesh.add(edge);
+
+      if (isHatchdoorBar(enrichedBar)) {
+        const cross = new THREE.LineSegments(
+          makeHatchdoorCrossGeometry(enrichedBar),
+          new THREE.LineBasicMaterial({ color: 0xe7f6ff, transparent: true, opacity: 0.72 })
+        );
+        cross.userData.hatchdoorCross = true;
+        mesh.add(cross);
+      }
 
       if (!enrichedBar.object || enrichedBar.object.doorType !== undefined) {
         const center = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
@@ -1898,7 +1951,6 @@ function applyVisibility() {
 function updateLabelCull(force = false, allowMaterialize = true) {
   if (!force && labelCullElapsed < LABEL_CULL_INTERVAL) return;
   labelCullElapsed = 0;
-  const cam = camera.position;
   let stanBatchDirty = false;
   for (const label of labels) {
     if (!label.userData.wantsVisible) {
@@ -1926,8 +1978,7 @@ function updateLabelCull(force = false, allowMaterialize = true) {
       label.visible = true;
       continue;
     }
-    const visible = cam.distanceToSquared(label.position) <= PROP_LABEL_DISTANCE * PROP_LABEL_DISTANCE;
-    if (visible && (allowMaterialize || label.userData.mesh || !label.userData.lazyStan)) {
+    if (allowMaterialize || label.userData.mesh || !label.userData.lazyStan) {
       materializeLabel(label).visible = true;
       setLabelVisible(label, true);
     } else {
@@ -1964,7 +2015,7 @@ function topDownView() {
 function selectTile(tile) {
   selected = { kind: 'stan', idx: tile.idx };
   for (const mesh of tileMeshes) mesh.material.opacity = 1;
-  for (const mesh of barMeshes) mesh.material.opacity = BAR_OPACITY;
+  for (const mesh of barMeshes) mesh.material.opacity = barBaseOpacity(mesh.userData.bar);
   selectedTile.textContent = [
     `stan ${tile.idx}  room ${tile.room}  id ${tile.id}`,
     `points ${tile.pointCount}  special ${tile.special}  rgb ${tile.r},${tile.g},${tile.b}`,
@@ -1978,7 +2029,8 @@ function selectBar(bar) {
   selected = { kind: 'bar', index: bar.index };
   resetSelectionOpacity();
   for (const mesh of barMeshes) {
-    mesh.material.opacity = mesh.userData.bar.index === bar.index ? 0.96 : 0.58;
+    const base = barBaseOpacity(mesh.userData.bar);
+    mesh.material.opacity = mesh.userData.bar.index === bar.index ? Math.max(base, 0.18) : Math.min(base, 0.58);
   }
   const pad = bar.pad?.pos ? bar.pad.pos.map((value) => value.toFixed(2)).join(', ') : 'none';
   selectedTile.textContent = [
@@ -2058,7 +2110,7 @@ function selectGap(gap) {
 
 function resetSelectionOpacity() {
   for (const mesh of tileMeshes) mesh.material.opacity = 1;
-  for (const mesh of barMeshes) mesh.material.opacity = BAR_OPACITY;
+  for (const mesh of barMeshes) mesh.material.opacity = barBaseOpacity(mesh.userData.bar);
   for (const mesh of propMeshes) mesh.material.opacity = PROP_OPACITY;
   for (const group of guardMeshes) {
     for (const child of group.children) {
